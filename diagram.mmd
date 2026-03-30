@@ -1,0 +1,83 @@
+classDiagram
+    class BudgetManager {
+        -BST expenseTree
+        -MinHeap billHeap
+        -HashMap categoryMap
+        +addExpense(Expense e) void
+        +addBill(Bill b) void
+        +setBudgetLimit(string category, double limit) void
+        +checkBudget(string category) void
+        +getNextBill() Bill
+        +markBillPaid(string name, Date paymentDate) void
+        +getExpensesByRange(Date start, Date end) vector~Expense~
+        +generateReport() void
+    }
+
+    class BST {
+        -BSTNode root
+        +insert(Expense e) void
+        +search(Date d) Expense
+        +rangeQuery(Date start, Date end) vector~Expense~
+        +inOrder() vector~Expense~
+        -insertHelper(BSTNode node, Expense e) BSTNode
+        -rangeHelper(BSTNode node, Date start, Date end, vector~Expense~ result) void
+    }
+
+    class MinHeap {
+        -Bill[] heap
+        -int size
+        +insert(Bill bill) void
+        +extractMin() Bill
+        +peek() Bill
+        -heapifyUp(int index) void
+        -heapifyDown(int index) void
+    }
+
+    class HashMap {
+        -Entry[] buckets
+        -int capacity
+        -int size
+        +insert(string key, CategoryInfo value) void
+        +get(string key) CategoryInfo
+        +remove(string key) void
+        +contains(string key) bool
+        -hash(string key) int
+        -resize() void
+    }
+
+    class Expense {
+        +Date date
+        +string category
+        +double amount
+        +string description
+        +display() void
+    }
+
+    class Bill {
+        +string name
+        +Date dueDate
+        +double amountDue
+        +bool isPaid
+        +Date paidOn
+        +markAsPaid(Date paymentDate) void
+        +display() void
+    }
+
+    class CategoryInfo {
+        +string name
+        +double budgetLimit
+        +double totalSpent
+        +addExpense(double amount) void
+        +getRemainingBudget() double
+        +isOverBudget() bool
+    }
+
+    BudgetManager *-- BST : expenseTree
+    BudgetManager *-- MinHeap : billHeap
+    BudgetManager *-- HashMap : categoryMap
+    BudgetManager ..> Expense : addExpense()
+    BudgetManager ..> Bill : addBill()
+    BudgetManager ..> CategoryInfo : category key lookup
+    BST --> Expense : nodes ordered by date
+    MinHeap --> Bill : nodes ordered by dueDate
+    HashMap --> CategoryInfo : maps category name

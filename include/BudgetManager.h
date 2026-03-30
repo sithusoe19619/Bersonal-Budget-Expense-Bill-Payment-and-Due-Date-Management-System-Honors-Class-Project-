@@ -1,0 +1,30 @@
+#ifndef BUDGETMANAGER_H
+#define BUDGETMANAGER_H
+
+#include <string>
+#include <vector>
+#include "BST.h"
+#include "MinHeap.h"
+#include "HashMap.h"
+#include "Expense.h"
+#include "Bill.h"
+#include "Date.h"
+
+class BudgetManager {
+private:
+    BST expenseTree;
+    MinHeap billHeap;
+    HashMap categoryMap;
+
+public:
+    void addExpense(const Expense& e);
+    void addBill(const Bill& b);
+    void setBudgetLimit(const std::string& category, double limit);
+    void checkBudget(const std::string& category);
+    Bill getNextBill();
+    void markBillPaid(const std::string& name, const Date& paymentDate);
+    std::vector<Expense> getExpensesByRange(const Date& start, const Date& end);
+    void generateReport();
+};
+
+#endif // BUDGETMANAGER_H
