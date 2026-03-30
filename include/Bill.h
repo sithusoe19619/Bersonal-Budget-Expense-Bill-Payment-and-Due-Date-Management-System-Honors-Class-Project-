@@ -12,6 +12,8 @@ public:
     bool isPaid;
     Date paidOn;
 
+    Bill() : amountDue(0.0), isPaid(false) {}
+
     void markAsPaid(const Date& paymentDate);
     void display() const;
 };

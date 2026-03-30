@@ -11,6 +11,7 @@ private:
         CategoryInfo value;
         bool occupied;
         bool isDeleted;
+        Entry() : occupied(false), isDeleted(false) {}
     };
 
     Entry* buckets;
@@ -27,7 +28,7 @@ public:
     HashMap& operator=(const HashMap&) = delete;
 
     void insert(const std::string& key, const CategoryInfo& value);
-    CategoryInfo* get(const std::string& key);
+    CategoryInfo* get(const std::string& key); // WARNING: pointer invalidated if insert() triggers resize()
     void remove(const std::string& key);
     bool contains(const std::string& key) const;
 };

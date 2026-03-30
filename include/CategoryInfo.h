@@ -9,6 +9,8 @@ public:
     double budgetLimit;
     double totalSpent;
 
+    CategoryInfo() : budgetLimit(0.0), totalSpent(0.0) {}
+
     void addExpense(double amount);
     double getRemainingBudget() const;
     bool isOverBudget() const;

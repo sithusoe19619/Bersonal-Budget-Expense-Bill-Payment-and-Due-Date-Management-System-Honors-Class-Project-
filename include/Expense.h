@@ -11,6 +11,8 @@ public:
     double amount;
     std::string description;
 
+    Expense() : amount(0.0) {}
+
     void display() const;
 };
 

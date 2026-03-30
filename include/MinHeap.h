@@ -1,6 +1,7 @@
 #ifndef MINHEAP_H
 #define MINHEAP_H
 
+#include <string>
 #include "Bill.h"
 
 class MinHeap {
@@ -22,6 +23,7 @@ public:
     Bill extractMin();
     Bill peek() const;
     bool isEmpty() const;
+    bool markPaidByName(const std::string& name, const Date& paymentDate);
 };
 
 #endif // MINHEAP_H

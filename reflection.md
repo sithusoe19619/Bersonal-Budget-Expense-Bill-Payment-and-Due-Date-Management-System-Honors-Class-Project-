@@ -109,3 +109,139 @@ Owns and manages the list of bills. Responsible for finding the next due bill an
 - `Bill* getNextUnpaidBill()` — scans all unpaid bills, finds the one with the earliest due date, and returns a pointer to it; returns nullptr if all bills are paid
 - `void markBillAsPaid(string billName, Date paymentDate)` — finds the bill by name and calls its markAsPaid method
 - `void displayAllBills()` — prints a summary of every bill with its status, for an overview screen
+
+---
+
+## Data Structure Justification
+
+### 1a. Initial Design
+
+**Why HashMap for budgets?**
+
+Every time the user logs an expense, the system must immediately look up that expense's category, retrieve the running total, add to it, and compare it against the budget limit. This happens on every single log operation, so the lookup must be as fast as possible. A HashMap maps category names (strings) directly to their `CategoryInfo` objects using a hash function, giving O(1) average-case lookup regardless of how many categories exist. Any other structure — a sorted array, a linked list, or even a BST — would require O(log n) or O(n) to find the right category on every expense log. Since budget checking is the most frequent operation in the system, O(1) is the right choice here.
+
+**Why MinHeap for bills?**
+
+The most common bill operation is Action 2: find the next upcoming bill. A MinHeap keeps the bill with the earliest due date at the root at all times, so retrieving it is O(1) — no scanning required. When a bill is marked as paid and removed, the heap reorganizes itself in O(log n). This is a direct match for the use case: the system always needs the minimum (earliest) due date, which is exactly what a MinHeap is optimized for. A plain array or list would require scanning all unpaid bills every time — O(n) — which gets slower as the bill count grows.
+
+**Why BST for expenses?**
+
+Action 3 asks for all expenses between a start date and an end date. A BST stores expenses sorted by date, so the system can descend the tree to the start date in O(log n) and then collect every node in range by continuing the traversal — stopping as soon as it passes the end date. The total cost is O(log n + k), where k is the number of results returned. A flat array or vector could only do this in O(n) by scanning every expense. As spending history grows over months or years, the BST keeps range queries fast while the array approach degrades linearly.
+
+---
+
+### 1b. Design Changes
+
+The following changes were made during header review before implementation began. Each change was driven by a correctness issue, an uninitialized field, or a missing operation discovered when tracing how the components interact.
+
+---
+
+**`Date` — added `operator==`, default constructor, parameterized constructor**
+
+The initial design had no way to compare two dates for equality. `BST::search()` needs to know when it has found an exact date match, and `Bill` comparison requires it too. `operator==` was added to cover this. Two constructors were also added: a default constructor that zeroes all fields (preventing garbage `int` values), and a parameterized constructor `Date(int d, int m, int y)` so that dates can be created in a single line throughout the implementation.
+
+---
+
+**`Expense` — added default constructor**
+
+`double amount` had no default value and would hold garbage on a freshly created object. A default constructor `Expense() : amount(0.0)` was added to ensure clean initialization.
+
+---
+
+**`Bill` — `markAsPaid` parameter changed to `const Date&`, constructor added**
+
+`markAsPaid` originally took `Date` by value, which is inconsistent with how `Date` is passed everywhere else in the system. Changed to `const Date&`. A default constructor `Bill() : amountDue(0.0), isPaid(false)` was also added — without it, `isPaid` and `amountDue` would hold garbage values and any bill logic would be undefined behavior.
+
+---
+
+**`CategoryInfo` — added default constructor**
+
+`budgetLimit` and `totalSpent` were uninitialized doubles. `getRemainingBudget()` and `isOverBudget()` would return garbage on any freshly created object. A constructor `CategoryInfo() : budgetLimit(0.0), totalSpent(0.0)` was added.
+
+---
+
+**`HashMap` — added `isDeleted` tombstone, `Entry` constructor, Rule of Three**
+
+Three changes were made. First, the `Entry` struct was missing an `isDeleted` flag. Open-addressing deletion requires a tombstone marker so that probe chains are not broken when an entry is removed — without it, `get()` would stop searching too early and miss valid entries. Second, `Entry` had no constructor, so `occupied` and `isDeleted` would be uninitialized booleans when `new Entry[n]` is called. `Entry() : occupied(false), isDeleted(false)` was added. Third, `HashMap` owns a raw pointer `Entry* buckets` and has a destructor, so the copy constructor and copy assignment operator were deleted to prevent shallow copies and double-frees.
+
+---
+
+**`MinHeap` — added Rule of Three, `markPaidByName()`**
+
+`MinHeap` owns `Bill* heap` and has a destructor, so the copy constructor and copy assignment operator were deleted. A `markPaidByName(const std::string& name, const Date& paymentDate)` method was also added. Without it, `BudgetManager::markBillPaid()` had no way to update a specific bill inside the heap — the only options available were `extractMin()`, `peek()`, and `isEmpty()`, none of which support finding a bill by name. `markPaidByName` searches the heap array linearly, updates `isPaid` and `paidOn` in place, and requires no re-heapify since the due date does not change.
+
+---
+
+**`BST` — added `BSTNode` constructor, `inOrderHelper`, explicit `Date.h` include, Rule of Three, duplicate date strategy, changed `search()` return type**
+
+Several changes were made. `BSTNode` had no constructor, so `left` and `right` were uninitialized raw pointers — following them during traversal would be undefined behavior. A constructor `BSTNode(const Expense& e) : data(e), left(nullptr), right(nullptr)` was added. A private `inOrderHelper` was missing despite `inOrder()` needing to recurse. `Date.h` was added as an explicit include since `Date` appears in method signatures and relying on transitive inclusion is fragile. The Rule of Three was applied since `BST` owns a raw pointer `BSTNode* root`. A comment was added documenting the duplicate date strategy — equal dates go right — so all expenses on the same day are preserved rather than silently overwritten. Finally, `search()` was changed from `Expense*` to `std::vector<Expense>` to correctly handle multiple expenses on the same date, and made `const`.
+
+---
+
+**`BudgetManager` — added explicit includes, `hasPendingBills()`**
+
+`Expense`, `Bill`, and `Date` were used in method signatures but only available through transitive includes. Explicit `#include` directives were added for all three. `hasPendingBills() const` was added as a guard for `getNextBill()` — without it, calling `getNextBill()` on an empty heap would crash with no way for the caller to check first.
+
+---
+
+## Traceability Matrix
+
+This section traces each user-facing requirement (the three core actions) through every layer of the design — from the action itself, to the components involved, to the specific header files, to the methods that fulfill it. Every method listed here maps directly to a declared signature in `include/`.
+
+---
+
+**Action 1: Log an expense and check if it exceeds a category budget**
+
+- Components: `BudgetManager`, `BST`, `HashMap`, `CategoryInfo`, `Expense`
+- Headers: `BudgetManager.h`, `BST.h`, `HashMap.h`, `CategoryInfo.h`, `Expense.h`
+- Methods: `BudgetManager::addExpense()`, `BudgetManager::checkBudget()`, `BudgetManager::setBudgetLimit()`, `BST::insert()`, `HashMap::get()`, `HashMap::insert()`, `CategoryInfo::addExpense()`, `CategoryInfo::isOverBudget()`, `CategoryInfo::getRemainingBudget()`
+
+---
+
+**Action 2: View the next upcoming bill and mark it as paid**
+
+- Components: `BudgetManager`, `MinHeap`, `Bill`
+- Headers: `BudgetManager.h`, `MinHeap.h`, `Bill.h`
+- Methods: `BudgetManager::hasPendingBills()`, `BudgetManager::getNextBill()`, `BudgetManager::markBillPaid()`, `MinHeap::peek()`, `MinHeap::markPaidByName()`, `Bill::markAsPaid()`, `Bill::display()`
+
+---
+
+**Action 3: Query spending history by date range**
+
+- Components: `BudgetManager`, `BST`, `Expense`, `Date`
+- Headers: `BudgetManager.h`, `BST.h`, `Expense.h`, `Date.h`
+- Methods: `BudgetManager::getExpensesByRange()`, `BST::rangeQuery()`, `BST::rangeHelper()`, `Date::isBefore()`, `Date::isAfter()`, `Date::isBetween()`, `Expense::display()`
+
+---
+
+### Supporting Concerns
+
+**Store and retrieve category budget limits**
+- Components: `HashMap`, `CategoryInfo`
+- Headers: `HashMap.h`, `CategoryInfo.h`
+- Methods: `HashMap::insert()`, `HashMap::get()`, `HashMap::contains()`
+
+**Prevent duplicate-date data loss in expense log**
+- Component: `BST`
+- Header: `BST.h`
+- Method: `BST::insertHelper()` — equal dates go right so all expenses on the same day are preserved
+
+**Prevent dangling pointer on bill lookup**
+- Component: `MinHeap`
+- Header: `MinHeap.h`
+- Method: `MinHeap::markPaidByName()` — modifies bill in place, no re-heapify needed
+
+**Prevent empty-heap crash**
+- Components: `BudgetManager`, `MinHeap`
+- Headers: `BudgetManager.h`, `MinHeap.h`
+- Methods: `BudgetManager::hasPendingBills()`, `MinHeap::isEmpty()`
+
+**Safe memory management for all raw pointers**
+- Components: `HashMap`, `MinHeap`, `BST`
+- Headers: `HashMap.h`, `MinHeap.h`, `BST.h`
+- Methods: Destructors and Rule of Three — copy constructor and copy assignment operator deleted on all three
+
+**Date comparison and formatting**
+- Component: `Date`
+- Header: `Date.h`
+- Methods: `Date::operator==()`, `Date::isBefore()`, `Date::isAfter()`, `Date::isBetween()`, `Date::toString()`

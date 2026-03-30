@@ -21,6 +21,7 @@ public:
     void addBill(const Bill& b);
     void setBudgetLimit(const std::string& category, double limit);
     void checkBudget(const std::string& category);
+    bool hasPendingBills() const;  // call before getNextBill() to avoid empty-heap crash
     Bill getNextBill();
     void markBillPaid(const std::string& name, const Date& paymentDate);
     std::vector<Expense> getExpensesByRange(const Date& start, const Date& end);
